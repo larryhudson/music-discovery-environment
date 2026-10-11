@@ -8,3 +8,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install \
     -r .agents/skills/using-lastfm/requirements.txt \
     -r .agents/skills/using-bandcamp/requirements.txt
+
+# Keep Node dependencies local to each skill. Chromium is provided by the workspace.
+npm ci --prefix .agents/skills/using-brave-search
+npm ci --prefix .agents/skills/reading-webpages
