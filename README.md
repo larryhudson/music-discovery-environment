@@ -6,11 +6,11 @@ Listening on **Qobuz**, discovering independent artists through the **Bandcamp w
 
 | Skill | CLI | Scope |
 | --- | --- | --- |
-| [using-bandcamp](.agents/skills/using-bandcamp/SKILL.md) | `.venv/bin/python .agents/skills/using-bandcamp/scripts/bandcamp.py` | Public wishlist and pagination |
-| [using-qobuz](.agents/skills/using-qobuz/SKILL.md) | `python3 .agents/skills/using-qobuz/scripts/qobuz.py` | Catalog search, releases, artists, library favorites |
-| [using-lastfm](.agents/skills/using-lastfm/SKILL.md) | `.venv/bin/python .agents/skills/using-lastfm/scripts/lastfm.py` | Completed scrobbles in an exact time window |
-| [using-exa-search](.agents/skills/using-exa-search/SKILL.md) | `node .agents/skills/using-exa-search/scripts/exa-search.mjs` | Exa web search, highlights, and filters |
-| [reading-webpages](.agents/skills/reading-webpages/SKILL.md) | `node .agents/skills/reading-webpages/scripts/read-page.mjs` | Playwright rendering, optional Defuddle extraction and Pi summary |
+| [using-bandcamp](.agents/skills/using-bandcamp/SKILL.md) | `bandcamp` | Public wishlist and pagination |
+| [using-qobuz](.agents/skills/using-qobuz/SKILL.md) | `qobuz` | Catalog search, releases, artists, library favorites |
+| [using-lastfm](.agents/skills/using-lastfm/SKILL.md) | `lastfm` | Completed scrobbles in an exact time window |
+| [using-exa-search](.agents/skills/using-exa-search/SKILL.md) | `exa-search` | Exa web search, highlights, and filters |
+| [reading-webpages](.agents/skills/reading-webpages/SKILL.md) | `read-page` | Playwright rendering, optional Defuddle extraction and Pi summary |
 
 Append `--help` to any CLI, or `SUBCOMMAND --help`, for its options. Bandcamp and Qobuz were copied from the supplied archive. Bandcamp now uses `httpx` for wishlist requests, with an identifying `music-discovery-environment/0.1` User-Agent; its cookie handling and JSON pagination are retained. Qobuz uses the Python standard library. Interactive browser authentication may need additional tooling described by the CLI. Qobuz can mutate favorites: ask before changing the library.
 
@@ -23,6 +23,26 @@ Last.fm and Bandcamp dependencies, plus each web skill's local npm dependencies,
 via `.agents-in-the-cloud/setup.sh`. Qobuz's
 read-only commands use the Python standard library and need no extra packages.
 To rerun dependency setup manually, use `sh .agents-in-the-cloud/setup.sh`.
+
+Setup also installs five executable symlinks in `/usr/local/bin`, available to
+agents and terminals without shell activation. Python wrappers select this
+repository's `.venv`; Node wrappers include `--use-env-proxy`. Commands preserve
+the caller's working directory, so relative paths and `.env` retain their usual
+meaning. The symlinks point into this checkout; rerun installation if it moves.
+To install just the commands in an existing workspace:
+
+```sh
+sh .agents-in-the-cloud/install-cli.sh
+qobuz --help
+lastfm auth status
+exa-search search 'new album reviews'
+```
+
+Installation is repeatable and replaces these five command names. If the default
+directory isn't writable, use `sudo sh .agents-in-the-cloud/install-cli.sh`, or
+set `SKILL_BIN_DIR` to a writable directory already on PATH. The direct script
+commands below remain available outside this workspace.
+
 For other environments:
 
 ```sh
@@ -126,6 +146,7 @@ research CLI, not an SSRF-safe public service.
 ## Offline tests
 
 ```sh
+python3 -m unittest discover -s .agents-in-the-cloud/tests -v
 PYTHONPATH=.agents/skills/using-lastfm/scripts .venv/bin/python -m unittest discover -s .agents/skills/using-lastfm/tests -v
 PYTHONPATH=.agents/skills/using-bandcamp/scripts .venv/bin/python -m unittest discover -s .agents/skills/using-bandcamp/tests -v
 PYTHONPATH=.agents/skills/using-qobuz/scripts python3 -m unittest discover -s .agents/skills/using-qobuz/tests -v

@@ -6,4 +6,4 @@ compatibility: "Python 3.10+ and QOBUZ_STATE_JSON (Amp secret), individual crede
 
 # Using Qobuz
 
-Run `python3 <skill-directory>/scripts/qobuz.py --help` first, resolving `<skill-directory>` to this skill's base directory. Use that same script prefix for every command, including `SUBCOMMAND --help`. Follow the CLI help for authentication, pagination, and authorization before mutations.
+Workspace setup installs `qobuz` on PATH, using the repository's Python virtual environment. Run `qobuz --help` first, then use `qobuz SUBCOMMAND --help` for command options. Follow the CLI help for authentication, pagination, and authorization before mutations. Outside this workspace, use `python3 <skill-directory>/scripts/qobuz.py`; resolve `<skill-directory>` to this skill's base directory.

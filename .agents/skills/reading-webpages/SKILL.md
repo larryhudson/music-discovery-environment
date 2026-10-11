@@ -6,16 +6,16 @@ compatibility: Node.js 22+, npm dependencies, Playwright Chromium; authenticated
 
 # Reading webpages
 
-Run `node <skill-directory>/scripts/read-page.mjs --help` first. Resolve paths relative to this skill directory.
+Workspace setup installs `read-page` on PATH; its wrapper runs Node with `--use-env-proxy`. Run `read-page --help` first. Outside this workspace, use `node <skill-directory>/scripts/read-page.mjs`. Resolve dependency paths relative to this skill directory.
 
 Install dependencies with `npm ci --prefix <skill-directory>`. Workspace setup does this automatically. Chromium is already provided in this workspace: no browser download is needed. The CLI prefers Playwright's matching browser, then finds `chromium`, `chromium-browser`, or `google-chrome` on PATH. `--browser-path PATH` or `WEBPAGE_BROWSER_PATH` overrides this.
 
 Outside this workspace, if Chromium is not available, run `node <skill-directory>/node_modules/playwright/cli.js install chromium`. Linux system dependencies may require `node <skill-directory>/node_modules/playwright/cli.js install-deps chromium` with administrator privileges.
 
 ```sh
-node <skill-directory>/scripts/read-page.mjs 'https://example.com' --pretty
-node <skill-directory>/scripts/read-page.mjs 'https://example.com/article' --defuddle --format markdown --pretty
-node <skill-directory>/scripts/read-page.mjs 'https://example.com/article' --defuddle --format markdown --summarize --pretty
+read-page 'https://example.com' --pretty
+read-page 'https://example.com/article' --defuddle --format markdown --pretty
+read-page 'https://example.com/article' --defuddle --format markdown --summarize --pretty
 ```
 
 Every read uses a fresh headless browser context, without saved cookies. Default output is rendered body text. `--format html` returns the rendered DOM; `--defuddle` parses Playwright's rendered HTML with Defuddle's Node API and linkedom, returning main content and article metadata. It uses ordinary npm imports, not injected browser scripts. Extraction sees rendered markup but not the browser's computed styles. Markdown requires Defuddle. Defuddle's async third-party fallback fetching is disabled. This does not bypass paywalls, CAPTCHAs, or access restrictions.
