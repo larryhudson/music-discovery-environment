@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 import unittest
-import urllib.request
+import httpx
 from pathlib import Path
 from unittest.mock import patch
 
@@ -107,6 +107,61 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(decode_cursor(page.as_json()["next_cursor"]), (123, "third-page"))
 
 
+class TransportTests(unittest.TestCase):
+    def mock_http(self, handler):
+        return httpx.Client(transport=httpx.MockTransport(handler))
+
+    def test_get_and_post_use_httpx_and_honest_user_agent(self):
+        requests = []
+        def handler(request):
+            requests.append(request)
+            return httpx.Response(200, json={"items": []})
+        client = BandcampClient()
+        for call in (lambda: client.first_wishlist_page(535347),
+                     lambda: client.next_wishlist_page(encode_cursor(535347, "cursor"))):
+            http = self.mock_http(handler)
+            with patch("bandcamp_cli.client.httpx.Client", return_value=http) as factory:
+                call()
+                self.assertEqual(factory.call_args.kwargs["timeout"], 30)
+                self.assertIs(factory.call_args.kwargs["cookies"], client.cookie_jar)
+            self.assertTrue(http.is_closed)
+        self.assertEqual(requests[0].method, "GET")
+        self.assertEqual(requests[0].url.params["fan_id"], "535347")
+        self.assertEqual(requests[1].method, "POST")
+        self.assertEqual(json.loads(requests[1].content), {
+            "fan_id": 535347, "older_than_token": "cursor", "count": 20,
+        })
+        for request in requests:
+            self.assertEqual(request.headers["User-Agent"], "music-discovery-environment/0.1")
+            self.assertEqual(request.headers["Accept"], "application/json")
+
+    def test_retries_and_redacts_transport_errors(self):
+        for status in (503, None):
+            calls = []
+            def handler(request):
+                calls.append(request)
+                if status is None:
+                    raise httpx.ConnectError("secret-cookie-marker", request=request)
+                return httpx.Response(status, text="secret-cookie-marker")
+            clients = [self.mock_http(handler) for _ in range(3)]
+            with patch("bandcamp_cli.client.httpx.Client", side_effect=clients), \
+                    patch("bandcamp_cli.client.time.sleep") as sleep:
+                with self.assertRaises(BandcampError) as error:
+                    BandcampClient().first_wishlist_page(535347)
+            self.assertEqual(len(calls), 3)
+            self.assertEqual([c.args[0] for c in sleep.call_args_list], [1, 2])
+            self.assertTrue(all(c.is_closed for c in clients))
+            self.assertNotIn("secret-cookie-marker", str(error.exception))
+            self.assertIsNone(error.exception.__cause__)
+
+    def test_challenge_html_has_clear_error(self):
+        http = self.mock_http(lambda request: httpx.Response(200, text="<html>Client Challenge</html>"))
+        with patch("bandcamp_cli.client.httpx.Client", return_value=http):
+            with self.assertRaisesRegex(BandcampError, "possibly a client challenge"):
+                BandcampClient().first_wishlist_page(535347)
+
+
+
 class AuthTests(unittest.TestCase):
     def test_import_browser_state_keeps_only_bandcamp_cookies(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -177,14 +232,15 @@ class EnvironmentAuthTests(unittest.TestCase):
         with patch.dict(os.environ, {"BANDCAMP_STATE_JSON": json.dumps({"cookies": cookies})}):
             client = BandcampClient()
         self.assertEqual(len(list(client.cookie_jar)), 1)
-        processor = next(h for h in client.opener.handlers
-                         if isinstance(h, urllib.request.HTTPCookieProcessor))
-        for host in ("bandcamp.com", "artist.bandcamp.com"):
-            request = processor.https_request(urllib.request.Request("https://" + host + "/"))
-            self.assertEqual(request.get_header("Cookie"), "identity=test-session")
-        for host in ("example.com", "evilbandcamp.com", "bandcamp.com.evil.test"):
-            request = processor.https_request(urllib.request.Request("https://" + host + "/"))
-            self.assertIsNone(request.get_header("Cookie"))
+        with httpx.Client(cookies=client.cookie_jar) as http:
+            for host in ("bandcamp.com", "artist.bandcamp.com"):
+                request = http.build_request("GET", "https://" + host + "/")
+                self.assertEqual(request.headers.get("Cookie"), "identity=test-session")
+            for host in ("example.com", "evilbandcamp.com", "bandcamp.com.evil.test"):
+                request = http.build_request("GET", "https://" + host + "/")
+                self.assertIsNone(request.headers.get("Cookie"))
+            request = http.build_request("GET", "http://bandcamp.com/")
+            self.assertIsNone(request.headers.get("Cookie"))
 
     def test_env_resolution_does_not_write_disk_and_login_is_disabled(self):
         state = dict(self.state)

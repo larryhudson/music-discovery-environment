@@ -6,14 +6,13 @@ import base64
 import http.cookiejar
 import json
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
+
+import httpx
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-MOBILE_UA = "Bandcamp/11.8.4 (Android 14; Pixel 8)"
+USER_AGENT = "music-discovery-environment/0.1"
 FAN_SEARCH_API = "https://bandcamp.com/api/fuzzysearch/2/app_autocomplete"
 MOBILE_WISHLIST_API = "https://bandcamp.com/api/mobile/26/fan_wishlist"
 WISHLIST_API = "https://bandcamp.com/api/fancollection/1/wishlist_items"
@@ -104,18 +103,23 @@ class BandcampClient:
             except (OSError, http.cookiejar.LoadError) as exc:
                 raise BandcampError(f"could not load cookies from {cookies_file}: {exc}") from exc
         self.cookie_jar = jar
-        self.opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(jar)
-        )
 
-    def _request(self, request: urllib.request.Request) -> bytes:
+    def _request(self, method: str, url: str, **kwargs: Any) -> bytes:
         for attempt in range(3):
             try:
-                with self.opener.open(request, timeout=self.timeout) as response:
-                    return response.read()
-            except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
+                # A scoped client closes connections even when a request fails.
+                # Keep the original CookieJar so domain/path/security rules apply.
+                with httpx.Client(cookies=self.cookie_jar, timeout=self.timeout,
+                                  follow_redirects=True) as http:
+                    response = http.request(method, url, **kwargs)
+                    response.raise_for_status()
+                    return response.content
+            except (httpx.HTTPStatusError, httpx.RequestError) as exc:
                 if attempt == 2:
-                    raise BandcampError(f"Bandcamp request failed: {exc}") from exc
+                    # Never include request URLs, response bodies, or cookie values.
+                    detail = (f"HTTP {exc.response.status_code}"
+                              if isinstance(exc, httpx.HTTPStatusError) else "network error")
+                    raise BandcampError(f"Bandcamp request failed: {detail}") from None
                 time.sleep(2**attempt)
         raise AssertionError("unreachable")
 
@@ -128,31 +132,27 @@ class BandcampClient:
         return data
 
     def _get_json(self, url: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        if params:
-            url += "?" + urllib.parse.urlencode(params)
-        request = urllib.request.Request(
-            url, headers={"Accept": "application/json", "User-Agent": MOBILE_UA}
-        )
         try:
-            data = json.loads(self._request(request))
-        except json.JSONDecodeError as exc:
-            raise BandcampError("Bandcamp returned invalid JSON") from exc
+            data = json.loads(self._request(
+                "GET", url, params=params,
+                headers={"Accept": "application/json", "User-Agent": USER_AGENT},
+            ))
+        except (ValueError, UnicodeDecodeError):
+            raise BandcampError("Bandcamp returned invalid JSON (possibly a client challenge)") from None
         return self._validate_payload(data)
 
     def _post(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
-        request = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode(),
-            headers={
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "User-Agent": MOBILE_UA,
-            },
-        )
         try:
-            data = json.loads(self._request(request))
-        except json.JSONDecodeError as exc:
-            raise BandcampError("Bandcamp returned invalid JSON") from exc
+            data = json.loads(self._request(
+                "POST", url, json=payload,
+                headers={
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "User-Agent": USER_AGENT,
+                },
+            ))
+        except (ValueError, UnicodeDecodeError):
+            raise BandcampError("Bandcamp returned invalid JSON (possibly a client challenge)") from None
         return self._validate_payload(data)
 
     def resolve_fan_id(self, username: str) -> int:

@@ -6,11 +6,11 @@ Listening on **Qobuz**, discovering independent artists through the **Bandcamp w
 
 | Skill | CLI | Scope |
 | --- | --- | --- |
-| [using-bandcamp](.agents/skills/using-bandcamp/SKILL.md) | `python3 .agents/skills/using-bandcamp/scripts/bandcamp.py` | Public wishlist and pagination |
+| [using-bandcamp](.agents/skills/using-bandcamp/SKILL.md) | `.venv/bin/python .agents/skills/using-bandcamp/scripts/bandcamp.py` | Public wishlist and pagination |
 | [using-qobuz](.agents/skills/using-qobuz/SKILL.md) | `python3 .agents/skills/using-qobuz/scripts/qobuz.py` | Catalog search, releases, artists, library favorites |
 | [using-lastfm](.agents/skills/using-lastfm/SKILL.md) | `.venv/bin/python .agents/skills/using-lastfm/scripts/lastfm.py` | Completed scrobbles in an exact time window |
 
-Append `--help` to any CLI, or `SUBCOMMAND --help`, for its options. Bandcamp and Qobuz were copied from the supplied archive, with their original implementations and skill instructions intact. Both use the Python standard library (interactive browser authentication may need additional tooling described by the CLI). Qobuz can mutate favorites: ask before changing the library.
+Append `--help` to any CLI, or `SUBCOMMAND --help`, for its options. Bandcamp and Qobuz were copied from the supplied archive. Bandcamp now uses `httpx` for wishlist requests, with an identifying `music-discovery-environment/0.1` User-Agent; its cookie handling and JSON pagination are retained. Qobuz uses the Python standard library. Interactive browser authentication may need additional tooling described by the CLI. Qobuz can mutate favorites: ask before changing the library.
 
 Last.fm adapts the archive's `music_support/lastfm_sync.py`, without bringing in the database or support-accounting application. Its HTTP transport uses standard `httpx` instead of `httpx2`; the original adapter tests are retained and CLI tests added. No credentials were supplied or live account access verified.
 
@@ -18,7 +18,7 @@ Last.fm adapts the archive's `music_support/lastfm_sync.py`, without bringing in
 
 ```sh
 python3 -m venv .venv
-.venv/bin/pip install -r .agents/skills/using-lastfm/requirements.txt
+.venv/bin/pip install -r .agents/skills/using-lastfm/requirements.txt -r .agents/skills/using-bandcamp/requirements.txt
 cp .env.example .env
 # Privately edit .env with your LASTFM_API_KEY and LASTFM_USERNAME.
 .venv/bin/python .agents/skills/using-lastfm/scripts/lastfm.py auth status
@@ -53,7 +53,7 @@ Never commit credentials, cookies, or exported authentication state. `.env` is i
 
 ```sh
 PYTHONPATH=.agents/skills/using-lastfm/scripts .venv/bin/python -m unittest discover -s .agents/skills/using-lastfm/tests -v
-PYTHONPATH=.agents/skills/using-bandcamp/scripts python3 -m unittest discover -s .agents/skills/using-bandcamp/tests -v
+PYTHONPATH=.agents/skills/using-bandcamp/scripts .venv/bin/python -m unittest discover -s .agents/skills/using-bandcamp/tests -v
 PYTHONPATH=.agents/skills/using-qobuz/scripts python3 -m unittest discover -s .agents/skills/using-qobuz/tests -v
 ```
 
