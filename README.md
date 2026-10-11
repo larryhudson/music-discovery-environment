@@ -16,6 +16,12 @@ Last.fm adapts the archive's `music_support/lastfm_sync.py`, without bringing in
 
 ## Last.fm setup
 
+Fresh AgentsInTheCloud workspaces automatically create `.venv` and install the
+Last.fm and Bandcamp dependencies via `.agents-in-the-cloud/setup.sh`. Qobuz's
+read-only commands use the Python standard library and need no extra packages.
+To rerun dependency setup manually, use `sh .agents-in-the-cloud/setup.sh`.
+For other environments:
+
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r .agents/skills/using-lastfm/requirements.txt -r .agents/skills/using-bandcamp/requirements.txt
