@@ -10,5 +10,5 @@ python3 -m venv .venv
     -r .agents/skills/using-bandcamp/requirements.txt
 
 # Keep Node dependencies local to each skill. Chromium is provided by the workspace.
-npm ci --prefix .agents/skills/using-brave-search
+npm ci --prefix .agents/skills/using-exa-search
 npm ci --prefix .agents/skills/reading-webpages

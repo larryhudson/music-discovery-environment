@@ -9,7 +9,7 @@ Listening on **Qobuz**, discovering independent artists through the **Bandcamp w
 | [using-bandcamp](.agents/skills/using-bandcamp/SKILL.md) | `.venv/bin/python .agents/skills/using-bandcamp/scripts/bandcamp.py` | Public wishlist and pagination |
 | [using-qobuz](.agents/skills/using-qobuz/SKILL.md) | `python3 .agents/skills/using-qobuz/scripts/qobuz.py` | Catalog search, releases, artists, library favorites |
 | [using-lastfm](.agents/skills/using-lastfm/SKILL.md) | `.venv/bin/python .agents/skills/using-lastfm/scripts/lastfm.py` | Completed scrobbles in an exact time window |
-| [using-brave-search](.agents/skills/using-brave-search/SKILL.md) | `node .agents/skills/using-brave-search/scripts/brave-search.mjs` | Brave web search and page offsets |
+| [using-exa-search](.agents/skills/using-exa-search/SKILL.md) | `node .agents/skills/using-exa-search/scripts/exa-search.mjs` | Exa web search, highlights, and filters |
 | [reading-webpages](.agents/skills/reading-webpages/SKILL.md) | `node .agents/skills/reading-webpages/scripts/read-page.mjs` | Playwright rendering, optional Defuddle extraction and Pi summary |
 
 Append `--help` to any CLI, or `SUBCOMMAND --help`, for its options. Bandcamp and Qobuz were copied from the supplied archive. Bandcamp now uses `httpx` for wishlist requests, with an identifying `music-discovery-environment/0.1` User-Agent; its cookie handling and JSON pagination are retained. Qobuz uses the Python standard library. Interactive browser authentication may need additional tooling described by the CLI. Qobuz can mutate favorites: ask before changing the library.
@@ -45,7 +45,7 @@ Template Secrets appear in workspace environment variables as placeholders. Agen
 
 | Name | Template setting | Allowed host |
 | --- | --- | --- |
-| `BRAVE_SEARCH_API_KEY` | Secret | `api.search.brave.com` |
+| `EXA_SEARCH_API_KEY` | Secret | `api.exa.ai` |
 | `PI_SUMMARY_MODEL` | Environment Variable (`opencode-go/deepseek-v4.1-flash`) | — |
 | `LASTFM_API_KEY` | Secret | `ws.audioscrobbler.com` |
 | `LASTFM_USERNAME` | Environment Variable | — |
@@ -67,21 +67,25 @@ Both Node CLIs are self-contained in their skill folders, with their own
 `node_modules/` is ignored everywhere; lockfiles are tracked.
 
 ```sh
-npm ci --prefix .agents/skills/using-brave-search
+npm ci --prefix .agents/skills/using-exa-search
 npm ci --prefix .agents/skills/reading-webpages
-node .agents/skills/using-brave-search/scripts/brave-search.mjs auth status
-node .agents/skills/using-brave-search/scripts/brave-search.mjs search 'new independent album reviews' --pretty
+node .agents/skills/using-exa-search/scripts/exa-search.mjs auth status
+node .agents/skills/using-exa-search/scripts/exa-search.mjs search 'new independent album reviews' --pretty
 node .agents/skills/reading-webpages/scripts/read-page.mjs 'https://example.com' --pretty
 node .agents/skills/reading-webpages/scripts/read-page.mjs 'https://stephango.com/saw' --defuddle --format markdown --pretty
 # Optional: sends page content to the configured model provider.
 node .agents/skills/reading-webpages/scripts/read-page.mjs 'https://stephango.com/saw' --defuddle --format markdown --summarize --pretty
 ```
 
-Get a Brave API key at https://api-dashboard.search.brave.com/ and configure
-`BRAVE_SEARCH_API_KEY` in the environment or `.env` (environment wins).
-`--env-file PATH` chooses another dotenv file. Search defaults to 10 results;
-`--offset 1` requests the next page, not the next individual result. Check
-`more_results_available`; `--raw` returns Brave's entire response.
+Get an Exa API key at https://dashboard.exa.ai/api-keys and configure
+`EXA_SEARCH_API_KEY` in the environment or `.env` (environment wins).
+`--env-file PATH` chooses another dotenv file. Search defaults to 10 results (up to
+100) using Exa auto search, with highlights. Exa has no offset pagination: increase
+`--count` or refine the query with `--include-domain`, `--exclude-domain`,
+`--start-published-date`, and `--end-published-date`. `--text` requests page text
+(capped by `--text-max-chars`, default 10,000 per result). `--raw` returns the
+complete Exa response including cost metadata. Requests may incur Exa charges;
+there are no automatic retries. See https://exa.ai/docs/reference/search.
 
 Chromium is **already installed in this workspace**. The reader prefers the
 matching Playwright browser, then an existing Chromium launcher on PATH. No
@@ -125,7 +129,7 @@ research CLI, not an SSRF-safe public service.
 PYTHONPATH=.agents/skills/using-lastfm/scripts .venv/bin/python -m unittest discover -s .agents/skills/using-lastfm/tests -v
 PYTHONPATH=.agents/skills/using-bandcamp/scripts .venv/bin/python -m unittest discover -s .agents/skills/using-bandcamp/tests -v
 PYTHONPATH=.agents/skills/using-qobuz/scripts python3 -m unittest discover -s .agents/skills/using-qobuz/tests -v
-npm test --prefix .agents/skills/using-brave-search
+npm test --prefix .agents/skills/using-exa-search
 npm test --prefix .agents/skills/reading-webpages
 ```
 
