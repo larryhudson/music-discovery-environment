@@ -16,6 +16,18 @@ Append `--help` to any CLI, or `SUBCOMMAND --help`, for its options. Bandcamp an
 
 Last.fm adapts the archive's `music_support/lastfm_sync.py`, without bringing in the database or support-accounting application. Its HTTP transport uses standard `httpx` instead of `httpx2`; the original adapter tests are retained and CLI tests added. No credentials were supplied or live account access verified.
 
+## Qobuz save notes
+
+```sh
+qobuz add album ALBUM_ID --reason "Why I saved it; tracks to try first"
+```
+
+Album saves now maintain [`qobuz-saves.json`](qobuz-saves.json) in the repository root, independent of your current directory. Each record includes the album ID/name, artist name, Qobuz link, reason and UTC timestamps. This versioned JSON (`{"version": 1, "saves": [...]}`) is the data source for a future saves-and-notes web app. Notes are local, not uploaded to Qobuz; no authentication data is included.
+
+One entry per album ID; specifying a new reason replaces the old note. Omitting a reason preserves an existing note, or uses null for a new save. Override the file with `--saves-file PATH` or `QOBUZ_SAVES_FILE`. Writes are locked and atomic, and happen only after a confirmed Qobuz save. A corrupt notes file blocks saving; if Qobuz succeeds but the local write fails, the error explicitly says so and the same command can be retried.
+
+This is a save journal, not a synced library: removals retain notes and past favorites are not backfilled. Only album/release saves record notes; other favorite types are unchanged. See [the skill](.agents/skills/using-qobuz/SKILL.md) for details. The advisory lock file is ignored by git; the JSON is not.
+
 ## Last.fm setup
 
 Fresh AgentsInTheCloud workspaces automatically create `.venv` and install the

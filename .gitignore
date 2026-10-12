@@ -7,3 +7,5 @@ __pycache__/
 !.env.example
 *state*.json
 cookies.txt
+qobuz-saves.json.lock
+.qobuz-saves-*

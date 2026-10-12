@@ -28,6 +28,9 @@ from .formatters import (
 )
 
 
+from .saves import default_saves_path, locked_saves, record_save
+
+
 TYPE_ALIASES = {
     "release": "album",
     "releases": "album",
@@ -64,7 +67,13 @@ def parser() -> argparse.ArgumentParser:
   album ID --similar; artist ID --similar; playlist ID
   library all --limit 10               inspect favorites, purchases, playlists
   library albums --source favorites    select favorites/purchases/all
+  add album ID --reason "Why this fits" save a favorite and local album notes
   add album ID; remove album ID        MUTATE favorites immediately, no prompt
+Album adds record metadata in qobuz-saves.json, even without --reason (null).
+Default: qobuz-saves.json in the repository root (independent of current cwd).
+Override with QOBUZ_SAVES_FILE or add album ID --saves-file PATH.
+Re-saving updates the record; omitting --reason preserves the previous note.
+Notes are local, not uploaded to Qobuz. Removing favorites retains the notes.
 Only run add/remove with explicit user authorization; there is no dry-run.
 Album/release and library/lib are aliases. Album --no-description omits reviews;
 artist --bio includes biography, --top-limit/--release-limit trim details.
@@ -196,6 +205,9 @@ Authentication (no credential values are printed):
             choices=("album", "release", "artist", "track", "label", "award"),
         )
         change.add_argument("id")
+        if action == "add":
+            change.add_argument("--reason", help="why you saved this album (album/release only)")
+            change.add_argument("--saves-file", type=Path, help="override the local album saves JSON path")
 
     return root
 
@@ -295,7 +307,39 @@ def _run_library(api: QobuzApi, args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _add_album(api: QobuzApi, args: argparse.Namespace) -> Any:
+    path = (args.saves_file or default_saves_path()).expanduser()
+    # Validate the notes file and metadata before changing the remote library.
+    with locked_saves(path) as data:
+        album = api.album(args.id, 1, 0)
+        title = album.get("title")
+        artist = album.get("artist", {}).get("name") if isinstance(album.get("artist"), dict) else None
+        if not isinstance(title, str) or not title.strip() or not isinstance(artist, str) or not artist.strip():
+            raise ValueError("Qobuz returned incomplete album metadata; favorite was not changed")
+        payload = api.change_favorite("add", "album", args.id)
+        if payload.get("status") not in ("success", True):
+            raise ApiError("Qobuz did not confirm the album save; local notes were not written")
+        try:
+            entry = record_save(path, data, args.id, title, artist, args.reason)
+        except (OSError, ValueError) as exc:
+            raise ValueError(
+                f"Album {args.id} was saved to Qobuz, but its local save record failed "
+                f"at {path}: {exc}. Retry the same add command to record the note."
+            ) from exc
+    if args.raw:
+        return payload
+    return {"ok": True, "action": "add", "type": "album", "id": args.id,
+            "saves_file": str(path), "save": entry}
+
+
 def run(args: argparse.Namespace) -> Any:
+    if args.command == "add":
+        if args.type not in ("album", "release") and (args.reason is not None or args.saves_file is not None):
+            raise ValueError("--reason and --saves-file are only supported for album/release saves")
+        if args.reason is not None:
+            args.reason = args.reason.strip()
+            if not args.reason:
+                raise ValueError("--reason must not be empty")
     config_path = args.config or default_config_path()
     if args.command == "auth":
         if args.auth_command == "import-har":
@@ -362,6 +406,8 @@ def run(args: argparse.Namespace) -> Any:
         return _run_library(api, args)
     if args.command in ("add", "remove"):
         item_type = TYPE_ALIASES.get(args.type, args.type)
+        if args.command == "add" and item_type == "album":
+            return _add_album(api, args)
         payload = api.change_favorite(args.command, item_type, args.id)
         if args.raw:
             return payload
